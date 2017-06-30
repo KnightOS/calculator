@@ -45,7 +45,6 @@ _:  ; if A in operator_chars
     ld a, b
     jr z, .parse_operator
     ; Ignore anything else (TODO: error here)
-.continue:
     inc hl
     jr .loop
 .current_token:
@@ -106,12 +105,10 @@ _:      inc hl
     ld (hl), a
     ld bc, 20
     add ix, bc
-    jr $
     kjp(.loop)
 .parse_operator:
-    ld b, 0x34
-    jr $
-    jr .continue
+    inc hl
+    kjp(.loop)
 .ensure_buffer:
     ; TODO
     ret

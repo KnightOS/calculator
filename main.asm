@@ -22,11 +22,12 @@ start:
 
     kld(hl, .test_expr)
     kcall(parse_expr)
-    jr .loop
-
+    jr main_loop
 .test_expr:
     .db "3.14+2", 0
 
+main_loop:
+    kld(iy, (screen_buffer))
 .loop:
     pcall(fastCopy)
 
