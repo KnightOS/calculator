@@ -5,7 +5,7 @@
     .db KEXC_ENTRY_POINT
     .dw start
     .db KEXC_STACK_SIZE
-    .dw 20
+    .dw 64
     .db KEXC_NAME
     .dw name
     .db KEXC_HEADER_END
@@ -25,7 +25,7 @@ start:
     jr .loop
 
 .test_expr:
-    .db "2+2", 0
+    .db "3.14+2", 0
 
 .loop:
     pcall(fastCopy)

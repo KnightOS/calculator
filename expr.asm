@@ -2,10 +2,10 @@ parse_expr:
     ; Free existing lists, if present
     ex de, hl
     ld bc, 0
-    kld(hl, (current_tokens))
+    kld(hl, (token_queue))
     pcall(cpHLBC)
     pcall(nz, free)
-    kld(hl, (current_operators))
+    kld(hl, (operator_stack))
     pcall(cpHLBC)
     pcall(nz, free)
 
@@ -25,8 +25,8 @@ parse_expr:
     ld (ix), a
     ; IX: current_token, IY: current_operator
     ld hl, 0x100
-    kld((current_tokens + 2), hl)
-    kld((current_operators + 2), hl)
+    kld((token_queue + 2), hl)
+    kld((operator_stack + 2), hl)
 
     ex de, hl
 .loop:
@@ -69,6 +69,14 @@ _:  cp a
     ld (ix), a
     inc ix
     push hl
+        push ix \ pop hl
+        ld d, h \ ld e, l
+        inc de
+        xor a
+        ld (hl), a
+        ld bc, 20
+        ldir
+    pop hl \ push hl
         inc hl
 .digit_loop:
         ld a, (hl)
@@ -83,18 +91,23 @@ _:      inc hl
         ld b, a
         xor a
         ld (hl), a
+        ex de, hl
     pop hl
     push bc
     push hl
     push ix
         push ix \ push hl \ pop ix \ pop hl
         pcall(strtofp)
-        jr $
     pop ix
     pop hl
     pop bc
+    ld h, d \ ld l, e
+    ld a, b
     ld (hl), a
-    jr .continue
+    ld bc, 20
+    add ix, bc
+    jr $
+    kjp(.loop)
 .parse_operator:
     ld b, 0x34
     jr $
