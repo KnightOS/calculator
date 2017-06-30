@@ -1,34 +1,36 @@
-parse_expr:
-    ; Free existing lists, if present
-    ex de, hl
-    ld bc, 0
-    kld(hl, (token_queue))
-    pcall(cpHLBC)
-    pcall(nz, free)
-    kld(hl, (operator_stack))
-    pcall(cpHLBC)
-    pcall(nz, free)
-
-    ; Set up new lists
+parser_init:
     ld bc, 0x100
     pcall(malloc)
     ret nz
     kld((token_queue), ix)
-    kld((.current_token), ix)
     xor a
     ld (ix), a
     push ix \ pop iy
     pcall(malloc)
     ret nz
     kld((operator_stack), ix)
-    kld((.current_op), ix)
     ld (ix), a
-    ; IX: current_token, IY: current_operator
     ld hl, 0x100
     kld((token_queue + 2), hl)
     kld((operator_stack + 2), hl)
+    ret
 
-    ex de, hl
+parse_expr:
+    kld(ix, (operator_stack))
+    kld((.current_op), ix)
+    kld(iy, (token_queue))
+    kld((.current_token), iy)
+    ; zero out previous buffer contents
+    push ix \ pop hl
+    ld d, h \ ld e, l
+    inc de
+    kld(bc, (operator_stack + 2))
+    ldir
+    push iy \ pop hl
+    ld d, h \ ld e, l
+    inc de
+    kld(bc, (token_queue + 2))
+    ldir
 .loop:
     ld a, (hl)
     or a
@@ -62,8 +64,9 @@ _:  cp a
 .parse_digit:
     ; We look for the end of the number, then shove a zero in there and hand
     ; the whole thing to strtofp.
-    ld a, 21
+    ld a, 10
     kcall(.ensure_buffer)
+    ; NODE_NUMBER is just followed by a 9 byte float
     ld a, NODE_NUMBER
     ld (ix), a
     inc ix
@@ -73,7 +76,7 @@ _:  cp a
         inc de
         xor a
         ld (hl), a
-        ld bc, 20
+        ld bc, 9
         ldir
     pop hl \ push hl
         inc hl
@@ -103,11 +106,19 @@ _:      inc hl
     ld h, d \ ld l, e
     ld a, b
     ld (hl), a
-    ld bc, 20
+    ld bc, 9
     add ix, bc
     kjp(.loop)
 .parse_operator:
     inc hl
+    ; operators are stored as
+    ; NODE_OPERATOR (1 byte)
+    ; type (1 byte)
+    ; flags (1 byte)
+    ; precedence (1 byte)
+    push hl
+        kld(hl, (operator_stack))
+    pop hl
     kjp(.loop)
 .ensure_buffer:
     ; TODO

@@ -17,6 +17,8 @@ start:
 
     pcall(getKeypadLock)
 
+    kcall(parser_init)
+
     kcall(init_ui)
     kcall(redraw_ui)
 
