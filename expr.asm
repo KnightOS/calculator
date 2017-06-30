@@ -1,4 +1,5 @@
 parser_init:
+    ; Allocate buffers
     ld bc, 0x100
     pcall(malloc)
     ret nz
@@ -13,24 +14,46 @@ parser_init:
     ld hl, 0x100
     kld((token_queue + 2), hl)
     kld((operator_stack + 2), hl)
+    ; Pre-relocate operator info
+    kld(hl, operators)
+    kld(de, end@operators)
+.loop:
+    push de
+        ld e, (hl)
+        inc hl
+        ld d, (hl)
+        ex de, hl
+        kld(bc, 0)
+        add hl, bc
+        ex de, hl
+        ld (hl), d
+        dec hl
+        ld (hl), e
+    pop de
+    ld bc, 6
+    add hl, bc
+    pcall(cpHLDE)
+    jr nz, .loop
     ret
 
 parse_expr:
-    kld(ix, (operator_stack))
-    kld((.current_op), ix)
-    kld(iy, (token_queue))
-    kld((.current_token), iy)
+    kld(ix, (token_queue))
+    kld((.current_token), ix)
+    kld(iy, (operator_stack))
+    kld((.current_op), iy)
     ; zero out previous buffer contents
-    push ix \ pop hl
-    ld d, h \ ld e, l
-    inc de
-    kld(bc, (operator_stack + 2))
-    ldir
-    push iy \ pop hl
-    ld d, h \ ld e, l
-    inc de
-    kld(bc, (token_queue + 2))
-    ldir
+    push hl
+        push ix \ pop hl
+        ld d, h \ ld e, l
+        inc de
+        kld(bc, (operator_stack + 2))
+        ldir
+        push iy \ pop hl
+        ld d, h \ ld e, l
+        inc de
+        kld(bc, (token_queue + 2))
+        ldir
+    pop hl
 .loop:
     ld a, (hl)
     or a
@@ -110,15 +133,41 @@ _:      inc hl
     add ix, bc
     kjp(.loop)
 .parse_operator:
-    inc hl
-    ; operators are stored as
-    ; NODE_OPERATOR (1 byte)
-    ; type (1 byte)
-    ; flags (1 byte)
-    ; precedence (1 byte)
-    push hl
-        kld(hl, (operator_stack))
+    ex de, hl
+    push ix
+        kld(ix, operators)
+.find_operator:
+        ld l, (ix)
+        ld h, (ix + 1)
+        kcall(expr_strcmp)
+        jr z, .op_found
+        ld bc, 6 ; size of op entry
+        add ix, bc
+        jr .find_operator
+        ; Note: due to checks in the main loop we are guaranteed to find an
+        ; operator, so we don't handle the not found case in this loop
+.op_found:
+        push ix \ pop hl
+    pop ix
+    ; HL is a pointer to this operator's entry in the operator table
+    push de
+        push hl
+            kld(hl, (operator_stack))
+            push iy \ pop de
+            pcall(cpHLDE)
+            ; Don't test the previous operation
+            jr z, .empty_stack
+        pop hl
+        ; Check to see if we need to commit the previous op
+        jr _
+.empty_stack:
+        pop hl
+_:      ; Push this to the operator stack
+        ld (iy), l
+        ld (iy + 1), h
+        inc iy \ inc iy
     pop hl
+    inc hl
     kjp(.loop)
 .ensure_buffer:
     ; TODO
@@ -129,41 +178,77 @@ token_queue:
 operator_stack:
     .dw 0, 0 ; addr, size
 
+; Like strcmp but only tests until DE's string ends
+expr_strcmp:
+    push hl
+    push de
+.loop:
+        ld a, (hl)
+        or a
+        jr z, .done
+        ex de, hl
+        cp (hl)
+        ex de, hl
+        jr nz, .done
+        inc de \ inc hl
+        jr .loop
+.done:
+    pop de
+    pop hl
+    ret
+
 operators:
     ;db string, operation, flags << 4 | precedence, function
     ;flags: bit 0: unary; 1: right associative
-    .db plus_str,          OP_UNARY_PLUS, (0b11 << 4) | 3
-    .dw _op_unary_plus
-    .db minus_str,         OP_UNARY_MINUS, (0b11 << 4) | 3
-    .dw _op_unary_minus
-    .db logical_not_str,   OP_LOGICAL_NOT, (0b11 << 4) | 3
-    .dw _op_logical_not
-    .db multiply_str,      OP_MULTIPLY, (0b00 << 4) | 5
+    ;.dw plus_str
+    ;.db OP_UNARY_PLUS, (0b11 << 4) | 3
+    ;.dw _op_unary_plus
+    ;.dw minus_str
+    ;.db OP_UNARY_MINUS, (0b11 << 4) | 3
+    ;.dw _op_unary_minus
+    ;.dw logical_not_str
+    ;.db OP_LOGICAL_NOT, (0b11 << 4) | 3
+    ;.dw _op_logical_not
+    .dw multiply_str
+    .db OP_MULTIPLY, (0b00 << 4) | 5
     .dw _op_multiply
-    .db divide_str,        OP_DIVIDE, (0b00 << 4) | 5
+    .dw divide_str
+    .db OP_DIVIDE, (0b00 << 4) | 5
     .dw _op_divide
-    .db modulo_str,        OP_MODULO, (0b00 << 4) | 5
-    .dw _op_modulo
-    .db plus_str,          OP_PLUS, (0b00 << 4) | 6
+    ;.dw modulo_str
+    ;.db OP_MODULO, (0b00 << 4) | 5
+    ;.dw _op_modulo
+    .dw plus_str
+    .db OP_PLUS, (0b00 << 4) | 6
     .dw _op_plus
-    .db minus_str,         OP_MINUS, (0b00 << 4) | 6
+    .dw minus_str
+    .db OP_MINUS, (0b00 << 4) | 6
     .dw _op_minus
-    .db lte_str,           OP_LESS_THAN_OR_EQUAL_TO, (0b00 << 4) | 8
-    .dw _op_less_or_equal
-    .db gte_str,           OP_GREATER_THAN_OR_EQUAL_TO, (0b00 << 4) | 8
-    .dw _op_greater_or_equal
-    .db less_than_str,     OP_LESS_THAN, (0b00 << 4) | 8
-    .dw _op_less_than
-    .db greater_than_str,  OP_GREATER_THAN, (0b00 << 4) | 8
-    .dw _op_greater_than
-    .db equal_to_str,      OP_EQUAL_TO, (0b00 << 4) | 9
-    .dw _op_equal_to
-    .db not_equal_to_str,  OP_NOT_EQUAL_TO, (0b00 << 4) | 9
-    .dw _op_not_equal_to
-    .db logical_and_str,   OP_LOGICAL_AND, (0b00 << 4) | 13
-    .dw _op_logical_and
-    .db logical_or_str,    OP_LOGICAL_OR, (0b00 << 4) | 14
-    .dw _op_logical_or
+    ;.dw lte_str
+    ;.db OP_LESS_THAN_OR_EQUAL_TO, (0b00 << 4) | 8
+    ;.dw _op_less_or_equal
+    ;.dw gte_str
+    ;.db OP_GREATER_THAN_OR_EQUAL_TO, (0b00 << 4) | 8
+    ;.dw _op_greater_or_equal
+    ;.dw less_than_str
+    ;.db OP_LESS_THAN, (0b00 << 4) | 8
+    ;.dw _op_less_than
+    ;.dw greater_than_str
+    ;.db OP_GREATER_THAN, (0b00 << 4) | 8
+    ;.dw _op_greater_than
+    ;.dw equal_to_str
+    ;.db OP_EQUAL_TO, (0b00 << 4) | 9
+    ;.dw _op_equal_to
+    ;.dw not_equal_to_str
+    ;.db OP_NOT_EQUAL_TO, (0b00 << 4) | 9
+    ;.dw _op_not_equal_to
+    ;.dw logical_and_str
+    ;.db OP_LOGICAL_AND, (0b00 << 4) | 13
+    ;.dw _op_logical_and
+    ;.dw logical_or_str
+    ;.db OP_LOGICAL_OR, (0b00 << 4) | 14
+    ;.dw _op_logical_or
+.end:
 plus_str:
     .db "+", 0
 minus_str:
@@ -193,4 +278,5 @@ logical_and_str:
 logical_or_str:
     .db "|", 0
 operator_chars:
-    .db "+-!*/%<>=&|", 0
+    ;.db "+-!*/%<>=&|", 0
+    .db "+-*/", 0

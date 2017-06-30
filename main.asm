@@ -26,7 +26,7 @@ start:
     kcall(parse_expr)
     jr main_loop
 .test_expr:
-    .db "3.14+2", 0
+    .db "2+2+2", 0
 
 main_loop:
     kld(iy, (screen_buffer))
