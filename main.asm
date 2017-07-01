@@ -23,10 +23,24 @@ start:
     kcall(redraw_ui)
 
     kld(hl, .test_expr)
+    ld de, 0x0808
+    pcall(drawStr)
     kcall(parse_expr)
+    kcall(eval_expr)
+
+    ld a, 0xF
+    kld(ix, result)
+    kld(hl, .output_str)
+    pcall(fptostr)
+
+    kld(iy, (screen_buffer))
+    ld de, 0x080F
+    pcall(drawStr)
     jr main_loop
 .test_expr:
-    .db "2+2+2", 0
+    .db "1.234+4.321", 0
+.output_str:
+    .block 20
 
 main_loop:
     kld(iy, (screen_buffer))

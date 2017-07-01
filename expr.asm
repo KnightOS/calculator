@@ -126,6 +126,8 @@ _:      inc hl
     ld (hl), a
     ld bc, 9
     add ix, bc
+    xor a
+    ld (ix), a
     kjp(.loop)
 .parse_operator:
     ex de, hl
@@ -162,6 +164,8 @@ _:      ; Push this to the operator stack
         ld (iy), l
         ld (iy + 1), h
         inc iy \ inc iy
+        xor a
+        ld (ix), a
     pop hl
     inc hl
     kjp(.loop)
@@ -171,6 +175,7 @@ _:      ; Push this to the operator stack
 .finalize:
     kld(bc, (operator_stack))
     push iy \ pop hl
+    dec hl \ dec bc
     ld a, NODE_OPERATOR
 .pop_ops:
     pcall(cpHLBC)
@@ -194,6 +199,43 @@ token_queue:
     .dw 0, 0 ; addr, size
 operator_stack:
     .dw 0, 0 ; addr, size
+
+result:
+    .block 9
+
+eval_expr:
+    kld(ix, (token_queue))
+.loop:
+    ld a, (ix)
+    or a
+    ret z ; end of expression
+    cp NODE_NUMBER
+    jr z, .do_number
+.do_operator:
+    ld l, (ix + 1)
+    ld h, (ix + 2)
+    push ix
+        push hl \ pop ix
+        ld l, (ix + 4)
+        ld h, (ix + 5)
+    pop ix
+    ld a, (ix + 3)
+    bit 0, a
+    jr nz, .do_unary
+.do_binary:
+    kld(de, _)
+    push de
+    kld(bc, 0)
+    add hl, bc
+    jp (hl)
+.do_unary:
+    ; TODO
+_:  jr .loop
+.do_number:
+    ; We just skip this at this stage
+    ld bc, 10
+    add ix, bc
+    jr .loop
 
 ; Like strcmp but only tests until DE's string ends
 expr_strcmp:
