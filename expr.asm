@@ -1,6 +1,6 @@
 parser_init:
     ; Allocate buffers
-    ld bc, 0x100
+    ld bc, 100
     pcall(malloc)
     ret nz
     kld((token_queue), ix)
@@ -11,9 +11,8 @@ parser_init:
     ret nz
     kld((operator_stack), ix)
     ld (ix), a
-    ld hl, 0x100
-    kld((token_queue + 2), hl)
-    kld((operator_stack + 2), hl)
+    kld((token_queue + 2), bc)
+    kld((operator_stack + 2), bc)
     ; Pre-relocate operator info
     kld(hl, operators)
     kld(de, end@operators)
@@ -57,7 +56,7 @@ parse_expr:
 .loop:
     ld a, (hl)
     or a
-    ret z ; end of expression
+    kjp(z, .finalize)
 
     kcall(.is_digit)
     jr z, .parse_digit
@@ -72,10 +71,6 @@ _:  ; if A in operator_chars
     ; Ignore anything else (TODO: error here)
     inc hl
     jr .loop
-.current_token:
-    .dw 0
-.current_op:
-    .dw 0
 .is_digit:
     cp '9'
     jr z, _
@@ -159,6 +154,7 @@ _:      inc hl
             jr z, .empty_stack
         pop hl
         ; Check to see if we need to commit the previous op
+        ; TODO
         jr _
 .empty_stack:
         pop hl
@@ -172,6 +168,27 @@ _:      ; Push this to the operator stack
 .ensure_buffer:
     ; TODO
     ret
+.finalize:
+    kld(bc, (operator_stack))
+    push iy \ pop hl
+    ld a, NODE_OPERATOR
+.pop_ops:
+    pcall(cpHLBC)
+    ret z
+    ld d, (hl)
+    dec hl
+    ld e, (hl)
+    dec hl
+    ld (ix), a
+    ld (ix + 1), e
+    ld (ix + 2), d
+    inc ix \ inc ix \ inc ix
+    jr .pop_ops
+; TODO: We can probably eliminate these vars at some point
+.current_token:
+    .dw 0
+.current_op:
+    .dw 0
 
 token_queue:
     .dw 0, 0 ; addr, size
