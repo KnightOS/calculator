@@ -8,9 +8,16 @@ _op_plus:
         inc ix
         kld(hl, result)
         pcall(fpAdd)
-    pop ix
+        push ix \ pop de
+        ld bc, 9
+        add ix, bc
+        ldir
+    pop hl
     ld bc, 3
-    add ix, bc
+    add hl, bc
+    push ix \ pop de
+    kld(bc, (token_queue + 2))
+    ldir
     ret
 
 _op_unary_plus:
