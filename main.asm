@@ -38,7 +38,7 @@ start:
     pcall(drawStr)
     jr main_loop
 .test_expr:
-    .db "1.2+2.2+3.2", 0
+    .db "2-1", 0
 .output_str:
     .block 20
 

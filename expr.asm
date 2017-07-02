@@ -223,14 +223,33 @@ eval_expr:
     bit 0, a
     jr nz, .do_unary
 .do_binary:
-    kld(de, _)
-    push de
     kld(bc, 0)
     add hl, bc
-    jp (hl)
+    push ix
+        kld(de, _)
+        push de
+        push hl
+            ld bc, -10
+            add ix, bc
+            push ix \ pop iy
+            inc iy
+            add ix, bc
+            inc ix
+            kld(hl, result)
+        ret
+_:      push ix \ pop de
+        ld bc, 9
+        add ix, bc
+        ldir
+    pop hl
+    ld bc, 3
+    add hl, bc
+    push ix \ pop de
+    kld(bc, (token_queue + 2))
+    ldir
 .do_unary:
     ; TODO
-_:  jr .loop
+    jr .loop
 .do_number:
     ; We just skip this at this stage
     ld bc, 10
@@ -282,7 +301,7 @@ operators:
     .dw _op_plus
     .dw minus_str
     .db OP_MINUS, (0b00 << 4) | 6
-    .dw _op_minus
+    .dw _op_subtract
     ;.dw lte_str
     ;.db OP_LESS_THAN_OR_EQUAL_TO, (0b00 << 4) | 8
     ;.dw _op_less_or_equal
